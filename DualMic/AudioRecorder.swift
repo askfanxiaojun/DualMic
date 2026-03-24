@@ -88,6 +88,10 @@ class AudioRecorder: NSObject {
     @ObservationIgnored nonisolated(unsafe) private var _audioThreadPaused = false
     @ObservationIgnored nonisolated private let audioLock = NSLock()
 
+    // First-frame timestamps used to compensate for the SCKit async startup offset.
+    @ObservationIgnored nonisolated(unsafe) private var _micFirstFrameDate: Date? = nil
+    @ObservationIgnored nonisolated(unsafe) private var _sysFirstFrameDate: Date? = nil
+
     // MARK: - Permissions
 
     func checkPermissions() async {
@@ -222,6 +226,8 @@ class AudioRecorder: NSObject {
         segmentStart = nil
         outputFileURL = nil
         isPaused = false
+        _micFirstFrameDate = nil
+        _sysFirstFrameDate = nil
 
         let timestamp = Int(Date().timeIntervalSince1970)
         let tmpDir = FileManager.default.temporaryDirectory
@@ -326,8 +332,25 @@ class AudioRecorder: NSObject {
         }
 
         let shouldMixSys = recordSystemAudio
+
+        // Calculate how many seconds after the mic's first frame the sys audio
+        // first arrived. This compensates for the async SCKit setup window.
+        let micFirst = _micFirstFrameDate
+        let sysFirst = _sysFirstFrameDate
+        let sysOffsetSeconds: Double
+        if let mic = micFirst, let sys = sysFirst {
+            sysOffsetSeconds = sys.timeIntervalSince(mic)
+        } else {
+            sysOffsetSeconds = 0
+        }
+
         let outputURL = try await Task.detached(priority: .userInitiated) {
-            try Self.mixAudio(micURL: micURL, sysURL: sysURL, includeSysAudio: shouldMixSys)
+            try Self.mixAudio(
+                micURL: micURL,
+                sysURL: sysURL,
+                includeSysAudio: shouldMixSys,
+                sysOffsetSeconds: sysOffsetSeconds
+            )
         }.value
 
         isMixing = false
@@ -361,7 +384,10 @@ class AudioRecorder: NSObject {
             guard let self else { return }
 
             self.audioLock.lock()
-            if !self._audioThreadPaused { try? self._micFile?.write(from: buffer) }
+            if !self._audioThreadPaused {
+                if self._micFirstFrameDate == nil { self._micFirstFrameDate = Date() }
+                try? self._micFile?.write(from: buffer)
+            }
             self.audioLock.unlock()
 
             guard let data = buffer.floatChannelData?[0], buffer.frameLength > 0 else { return }
@@ -384,7 +410,7 @@ class AudioRecorder: NSObject {
 
         let config = SCStreamConfiguration()
         config.capturesAudio = true
-        config.sampleRate = 44100
+        config.sampleRate = 48000
         config.channelCount = 2
         config.width = 2
         config.height = 2
@@ -392,10 +418,8 @@ class AudioRecorder: NSObject {
 
         let filter = SCContentFilter(display: display, excludingApplications: [], exceptingWindows: [])
 
-        if let sysURL = sysTempURL {
-            let sysFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
-            _sysFile = try AVAudioFile(forWriting: sysURL, settings: sysFormat.settings)
-        }
+        // _sysFile is created lazily in the stream() callback using the actual
+        // delivered buffer format, so there is no sample-rate mismatch.
 
         scStream = SCStream(filter: filter, configuration: config, delegate: self)
         try scStream?.addStreamOutput(
@@ -408,7 +432,12 @@ class AudioRecorder: NSObject {
 
     // MARK: - Offline Mix & Export (static, runs on background thread)
 
-    private static nonisolated func mixAudio(micURL: URL, sysURL: URL, includeSysAudio: Bool = true) throws -> URL {
+    private static nonisolated func mixAudio(
+        micURL: URL,
+        sysURL: URL,
+        includeSysAudio: Bool = true,
+        sysOffsetSeconds: Double = 0
+    ) throws -> URL {
         let tmpDir = FileManager.default.temporaryDirectory
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
@@ -425,7 +454,8 @@ class AudioRecorder: NSObject {
             hasSysAudio = false
         }
 
-        let outputFormat = AVAudioFormat(standardFormatWithSampleRate: 44100, channels: 2)!
+        // Use 48000 Hz to match macOS hardware rate; avoids SRC in the render pass.
+        let outputFormat = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
         let renderEngine = AVAudioEngine()
         let micPlayer = AVAudioPlayerNode()
         renderEngine.attach(micPlayer)
@@ -450,19 +480,34 @@ class AudioRecorder: NSObject {
         micPlayer.scheduleFile(micFile, at: nil)
         if let sp = sysPlayer, let sf = sysFile {
             sp.play()
-            sp.scheduleFile(sf, at: nil)
+            // Delay sys track by sysOffsetSeconds to compensate for the async SCKit
+            // setup window during which the mic was already recording.
+            let clampedOffset = max(0, sysOffsetSeconds)
+            if clampedOffset > 0 {
+                let offsetSamples = AVAudioFramePosition(clampedOffset * outputFormat.sampleRate)
+                let startTime = AVAudioTime(sampleTime: offsetSamples, atRate: outputFormat.sampleRate)
+                sp.scheduleFile(sf, at: startTime)
+            } else {
+                sp.scheduleFile(sf, at: nil)
+            }
         }
 
         let outputSettings: [String: Any] = [
             AVFormatIDKey: kAudioFormatMPEG4AAC,
-            AVSampleRateKey: 44100,
+            AVSampleRateKey: 48000,
             AVNumberOfChannelsKey: 2,
             AVEncoderBitRateKey: 192000
         ]
         let outputFile = try AVAudioFile(forWriting: outputURL, settings: outputSettings)
 
         let renderBuffer = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: 4096)!
-        let totalFrames = max(micFile.length, sysFile?.length ?? 0)
+
+        // Normalize frame counts to output sample rate before comparing durations,
+        // so that tracks recorded at different hardware rates align correctly.
+        let micDuration = Double(micFile.length) / micFile.processingFormat.sampleRate
+        let rawSysDuration = sysFile.map { Double($0.length) / $0.processingFormat.sampleRate } ?? 0
+        let sysEndTime = max(0, sysOffsetSeconds) + rawSysDuration
+        let totalFrames = AVAudioFramePosition(max(micDuration, sysEndTime) * outputFormat.sampleRate)
         var rendered: AVAudioFramePosition = 0
 
         while rendered < totalFrames {
@@ -505,7 +550,13 @@ extension AudioRecorder: SCStreamOutput {
         guard let pcmBuffer = Self.extractPCMBuffer(from: sampleBuffer) else { return }
 
         audioLock.lock()
-        if !_audioThreadPaused { try? _sysFile?.write(from: pcmBuffer) }
+        if !_audioThreadPaused {
+            if _sysFirstFrameDate == nil { _sysFirstFrameDate = Date() }
+            if _sysFile == nil, let sysURL = sysTempURL {
+                _sysFile = try? AVAudioFile(forWriting: sysURL, settings: pcmBuffer.format.settings)
+            }
+            try? _sysFile?.write(from: pcmBuffer)
+        }
         audioLock.unlock()
 
         guard let data = pcmBuffer.floatChannelData?[0], pcmBuffer.frameLength > 0 else { return }
