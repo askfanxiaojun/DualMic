@@ -2,6 +2,8 @@
 
 **DualMic** 是一款 macOS 应用，可同时录制**麦克风**和**系统声音**，并将两路音频混合导出为 `.m4a` 文件。
 
+官方网站：https://askfanxiaojun.github.io/DualMic/
+
 下载安装链接：https://github.com/askfanxiaojun/DualMic/releases
 
 ---

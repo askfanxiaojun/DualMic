@@ -1,0 +1,673 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="DualMic 是一款开源 macOS 录音工具，可同时录制麦克风与系统声音，并在本地混合导出为 M4A。">
+  <meta name="theme-color" content="#07111f">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="DualMic｜把双方声音一次录全">
+  <meta property="og:description" content="同时录制麦克风与系统声音。适合视频面试、线上会议与课程复盘。">
+  <meta property="og:image" content="https://askfanxiaojun.github.io/DualMic/assets/app-icon.png">
+  <meta property="og:url" content="https://askfanxiaojun.github.io/DualMic/">
+  <link rel="canonical" href="https://askfanxiaojun.github.io/DualMic/">
+  <link rel="icon" href="assets/app-icon.png" type="image/png">
+  <title>DualMic｜把双方声音一次录全</title>
+  <style>
+    :root {
+      --night: #07111f;
+      --night-soft: #0c1a2b;
+      --paper: #f3f6fa;
+      --paper-strong: #ffffff;
+      --ink: #101927;
+      --muted: #617084;
+      --muted-dark: #93a4ba;
+      --line: #d9e0e9;
+      --line-dark: rgba(255, 255, 255, .13);
+      --blue: #087cff;
+      --blue-bright: #53aaff;
+      --cyan: #50e4dc;
+      --red: #ff493d;
+      --orange: #ff9b35;
+      --green: #3ddc78;
+      --content: 1180px;
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: -apple-system, "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+      font-synthesis: none;
+      text-rendering: optimizeLegibility;
+    }
+    body.nav-open { overflow: hidden; }
+    img { display: block; max-width: 100%; }
+    a { color: inherit; text-decoration: none; }
+    button { color: inherit; font: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    .shell { width: min(calc(100% - 44px), var(--content)); margin-inline: auto; }
+    .mono { font-family: "SFMono-Regular", Menlo, Consolas, monospace; }
+    .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+
+    .site-header {
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 50;
+      border-bottom: 1px solid rgba(255, 255, 255, .08);
+      background: rgba(7, 17, 31, .82);
+      color: #fff;
+      backdrop-filter: blur(20px) saturate(140%);
+    }
+    .nav { min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
+    .brand { display: inline-flex; align-items: center; gap: 11px; font-size: 17px; font-weight: 760; letter-spacing: -.03em; }
+    .brand img { width: 38px; height: 38px; border-radius: 9px; box-shadow: 0 7px 20px rgba(8, 124, 255, .28); }
+    .brand span { display: grid; gap: 1px; }
+    .brand small { color: #8ba0b8; font: 600 8px/1.2 "SFMono-Regular", Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .nav-links { display: flex; align-items: center; gap: 26px; color: #a8b7c9; font-size: 14px; }
+    .nav-links > a:not(.nav-cta) { transition: color .18s ease; }
+    .nav-links > a:not(.nav-cta):hover { color: #fff; }
+    .nav-cta {
+      min-height: 42px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 16px;
+      border-radius: 10px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 720;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16);
+    }
+    .menu-button { display: none; width: 44px; height: 44px; border: 0; border-radius: 10px; background: rgba(255, 255, 255, .08); }
+    .menu-button span, .menu-button::before, .menu-button::after { content: ""; display: block; width: 20px; height: 2px; margin: 4px auto; border-radius: 2px; background: #fff; transition: transform .2s ease, opacity .2s ease; }
+    .nav-open .menu-button span { opacity: 0; }
+    .nav-open .menu-button::before { transform: translateY(6px) rotate(45deg); }
+    .nav-open .menu-button::after { transform: translateY(-6px) rotate(-45deg); }
+
+    .hero-wrap {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 80% 32%, rgba(8, 124, 255, .23), transparent 32%),
+        linear-gradient(180deg, var(--night) 0%, #07111f 80%, #0a1626 100%);
+      color: #fff;
+    }
+    .hero-wrap::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image: linear-gradient(rgba(255, 255, 255, .032) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .032) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(to bottom, black, transparent 80%);
+    }
+    .hero {
+      position: relative;
+      min-height: 840px;
+      display: grid;
+      grid-template-columns: minmax(0, .94fr) minmax(480px, 1.06fr);
+      align-items: center;
+      gap: 70px;
+      padding: 144px 0 92px;
+    }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 22px;
+      color: var(--blue-bright);
+      font: 700 11px/1.2 "SFMono-Regular", Menlo, monospace;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { content: ""; width: 24px; height: 1px; background: currentColor; }
+    .hero h1 { max-width: 650px; margin: 0; font-size: clamp(54px, 6.5vw, 86px); line-height: .98; letter-spacing: -.075em; font-weight: 820; text-wrap: balance; }
+    .hero h1 strong { display: block; color: var(--blue-bright); font-weight: inherit; }
+    .hero-copy { max-width: 610px; margin: 30px 0 0; color: #9eb0c7; font-size: 18px; line-height: 1.78; text-wrap: pretty; }
+    .hero-copy b { color: #fff; font-weight: 650; }
+    .actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px; }
+    .button {
+      min-height: 52px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 0 21px;
+      border: 1px solid rgba(255, 255, 255, .19);
+      border-radius: 11px;
+      font-weight: 730;
+      transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+    }
+    .button:hover { transform: translateY(-2px); }
+    .button-primary { border-color: var(--blue); background: var(--blue); color: #fff; box-shadow: 0 12px 34px rgba(8, 124, 255, .28); }
+    .button-primary:hover { box-shadow: 0 16px 40px rgba(8, 124, 255, .38); }
+    .button-secondary { background: rgba(255, 255, 255, .055); color: #e7eef7; }
+    .button-secondary:hover { background: rgba(255, 255, 255, .1); }
+    .button-arrow { font-size: 18px; line-height: 1; }
+    .fact-row { display: flex; flex-wrap: wrap; gap: 13px 23px; margin-top: 28px; color: #7f93ab; font-size: 12px; }
+    .fact-row span { display: inline-flex; align-items: center; gap: 8px; }
+    .fact-row span::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 10px rgba(80, 228, 220, .7); }
+
+    .app-stage { position: relative; min-height: 590px; display: grid; place-items: center; perspective: 1200px; }
+    .app-glow { position: absolute; width: 72%; aspect-ratio: 1; border-radius: 50%; background: rgba(8, 124, 255, .2); filter: blur(70px); }
+    .wave-field { position: absolute; inset: 8% 0 auto; height: 210px; display: flex; align-items: center; justify-content: center; gap: 7px; opacity: .75; }
+    .wave-field i { width: 3px; height: var(--h); border-radius: 4px; background: linear-gradient(to bottom, transparent, var(--blue-bright), var(--cyan), transparent); animation: wave 1.7s ease-in-out infinite alternate; animation-delay: var(--d); }
+    @keyframes wave { from { transform: scaleY(.42); opacity: .45; } to { transform: scaleY(1); opacity: 1; } }
+    .app-window {
+      position: relative;
+      z-index: 2;
+      width: min(100%, 590px);
+      padding: 13px;
+      border: 1px solid rgba(255, 255, 255, .2);
+      border-radius: 26px;
+      background: rgba(255, 255, 255, .08);
+      box-shadow: 0 42px 90px rgba(0, 0, 0, .42), inset 0 1px 0 rgba(255, 255, 255, .11);
+      transform: rotateY(-4deg) rotateX(1deg);
+      backdrop-filter: blur(18px);
+    }
+    .app-window img { width: 100%; border-radius: 18px; }
+    .channel-pill { position: absolute; z-index: 3; display: flex; align-items: center; gap: 9px; padding: 11px 14px; border: 1px solid rgba(255, 255, 255, .14); border-radius: 99px; background: rgba(7, 17, 31, .88); color: #e8f0fa; font-size: 12px; font-weight: 650; box-shadow: 0 14px 35px rgba(0, 0, 0, .25); backdrop-filter: blur(14px); }
+    .channel-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--pill); box-shadow: 0 0 12px color-mix(in srgb, var(--pill) 70%, transparent); }
+    .channel-mic { --pill: var(--blue-bright); left: -10px; bottom: 24%; }
+    .channel-system { --pill: var(--green); right: -12px; top: 21%; }
+    .scroll-cue { position: absolute; left: 50%; bottom: 26px; display: grid; justify-items: center; gap: 8px; color: #61758e; font: 600 9px/1 "SFMono-Regular", Menlo, monospace; letter-spacing: .12em; transform: translateX(-50%); }
+    .scroll-cue::after { content: ""; width: 1px; height: 24px; background: linear-gradient(var(--blue-bright), transparent); }
+
+    .problem-strip { background: #0a1626; color: #fff; border-top: 1px solid var(--line-dark); }
+    .problem-grid { min-height: 230px; display: grid; grid-template-columns: .68fr 1.32fr; gap: 70px; align-items: center; }
+    .problem-label { color: #6f859d; font: 700 11px/1.4 "SFMono-Regular", Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .problem-grid blockquote { margin: 0; font-size: clamp(27px, 3.8vw, 45px); line-height: 1.2; letter-spacing: -.05em; font-weight: 660; text-wrap: balance; }
+    .problem-grid blockquote span { color: var(--blue-bright); }
+
+    .section { padding: 118px 0; border-bottom: 1px solid var(--line); }
+    .section-head { max-width: 810px; margin-bottom: 56px; }
+    .section-head.split { max-width: none; display: grid; grid-template-columns: .85fr 1.15fr; gap: 80px; align-items: end; }
+    .section-kicker { margin: 0 0 18px; color: var(--blue); font: 730 11px/1.2 "SFMono-Regular", Menlo, monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .section h2 { margin: 0; font-size: clamp(41px, 5vw, 65px); line-height: 1.04; letter-spacing: -.06em; text-wrap: balance; }
+    .section-lead { margin: 20px 0 0; color: var(--muted); font-size: 17px; line-height: 1.8; text-wrap: pretty; }
+    .section-head.split .section-lead { margin: 0; }
+
+    .feature-grid { display: grid; grid-template-columns: 1.12fr .88fr .88fr; gap: 16px; }
+    .feature-card { min-height: 330px; display: flex; flex-direction: column; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius); background: rgba(255, 255, 255, .68); overflow: hidden; }
+    .feature-card:first-child { min-height: 420px; grid-row: span 2; background: var(--night); color: #fff; border-color: var(--night); }
+    .feature-card.wide { grid-column: span 2; min-height: 230px; display: grid; grid-template-columns: 1fr 1fr; gap: 26px; align-items: end; }
+    .feature-index { color: var(--blue); font: 750 10px/1 "SFMono-Regular", Menlo, monospace; letter-spacing: .1em; }
+    .feature-card:first-child .feature-index { color: var(--blue-bright); }
+    .dual-meter { flex: 1; display: grid; align-content: center; gap: 24px; padding: 24px 0 16px; }
+    .meter { display: grid; grid-template-columns: 74px 1fr auto; align-items: center; gap: 14px; color: #9db0c6; font-size: 12px; }
+    .meter strong { color: #d9e7f5; font-size: 12px; }
+    .meter-track { height: 9px; overflow: hidden; border-radius: 99px; background: #202d3d; }
+    .meter-fill { width: var(--level); height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--tone), color-mix(in srgb, var(--tone) 55%, white)); animation: level 2.6s ease-in-out infinite alternate; }
+    @keyframes level { 0% { width: calc(var(--level) * .42); } 100% { width: var(--level); } }
+    .feature-card h3 { margin: auto 0 10px; font-size: 25px; letter-spacing: -.04em; }
+    .feature-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.72; }
+    .feature-card:first-child p { color: #91a5bc; }
+    .feature-symbol { width: 52px; height: 52px; display: grid; place-items: center; margin: 42px 0 58px; border: 1px solid #b8c5d4; border-radius: 50%; color: var(--blue); font: 700 19px/1 "SFMono-Regular", Menlo, monospace; }
+    .feature-card.wide .feature-symbol { margin: 0; justify-self: end; align-self: start; }
+
+    .preview-section { overflow: hidden; background: #e8edf4; }
+    .preview-layout { display: grid; grid-template-columns: .78fr 1.22fr; gap: 40px; align-items: center; }
+    .state-tabs { display: grid; gap: 8px; }
+    .state-tab { width: 100%; display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 14px; padding: 16px 18px; border: 1px solid transparent; border-radius: 14px; background: transparent; text-align: left; cursor: pointer; transition: background .2s ease, border-color .2s ease, transform .2s ease; }
+    .state-tab:hover { transform: translateX(4px); }
+    .state-tab[aria-selected="true"] { border-color: #c8d2df; background: rgba(255, 255, 255, .72); box-shadow: 0 12px 30px rgba(31, 47, 66, .07); }
+    .state-dot { width: 10px; height: 10px; border: 2px solid var(--state); border-radius: 50%; box-shadow: 0 0 0 6px color-mix(in srgb, var(--state) 12%, transparent); }
+    .state-tab strong { display: block; margin-bottom: 3px; font-size: 15px; }
+    .state-tab small { color: var(--muted); font-size: 12px; }
+    .state-tab b { color: #98a5b5; font-weight: 500; }
+    .preview-stage { position: relative; min-height: 650px; display: grid; place-items: center; border: 1px solid #cfd7e2; border-radius: 32px; background: #dce4ee; overflow: hidden; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .7); }
+    .preview-stage::before { content: ""; position: absolute; width: 560px; height: 560px; border: 1px solid rgba(8, 124, 255, .22); border-radius: 50%; box-shadow: 0 0 0 74px rgba(8, 124, 255, .035), 0 0 0 148px rgba(8, 124, 255, .025); }
+    .preview-image { position: relative; z-index: 1; width: min(80%, 560px); max-height: 590px; object-fit: contain; border-radius: 24px; filter: drop-shadow(0 26px 28px rgba(37, 51, 69, .22)); transition: opacity .18s ease, transform .28s ease; }
+    .preview-image.changing { opacity: 0; transform: translateY(12px) scale(.985); }
+
+    .how-section { background: var(--paper-strong); }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+    .step { min-height: 330px; display: flex; flex-direction: column; padding: 30px; border-right: 1px solid var(--line); }
+    .step:last-child { border-right: 0; }
+    .step-number { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid var(--ink); border-radius: 50%; font: 760 11px/1 "SFMono-Regular", Menlo, monospace; }
+    .step-line { width: 100%; height: 1px; margin: 44px 0 30px; background: var(--line); }
+    .step h3 { margin: auto 0 10px; font-size: 24px; letter-spacing: -.04em; }
+    .step p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.75; }
+    .step a { color: var(--blue); font-weight: 650; }
+    .permission-note { margin-top: 18px; display: grid; grid-template-columns: auto 1fr auto; gap: 15px; align-items: center; padding: 18px 20px; border: 1px solid #bfd9ff; border-radius: 16px; background: #edf6ff; color: #31516f; font-size: 13px; line-height: 1.65; }
+    .permission-note i { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--blue); color: #fff; font: normal 700 13px/1 "SFMono-Regular", Menlo, monospace; }
+    .permission-note strong { color: #143c64; }
+    .permission-note .mono { color: #56728d; font-size: 10px; white-space: nowrap; }
+
+    .local-panel { display: grid; grid-template-columns: .9fr 1.1fr; overflow: hidden; border-radius: 30px; background: var(--night); color: #fff; }
+    .local-copy { min-height: 520px; display: flex; flex-direction: column; justify-content: space-between; padding: 44px; }
+    .local-copy h2 { max-width: 520px; }
+    .local-copy p { max-width: 490px; margin: 20px 0 0; color: #91a4bb; font-size: 16px; line-height: 1.8; }
+    .local-facts { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 34px; }
+    .local-facts span { padding: 9px 12px; border: 1px solid rgba(255, 255, 255, .13); border-radius: 99px; color: #a9b9ca; font: 650 10px/1 "SFMono-Regular", Menlo, monospace; }
+    .local-visual { position: relative; min-height: 520px; display: grid; place-items: center; overflow: hidden; background: var(--blue); }
+    .record-disc { position: relative; width: 260px; height: 260px; display: grid; place-items: center; border: 1px solid rgba(255, 255, 255, .45); border-radius: 50%; box-shadow: 0 0 0 54px rgba(255, 255, 255, .08), 0 0 0 108px rgba(255, 255, 255, .055); }
+    .record-disc::before { content: ""; width: 82px; height: 82px; border-radius: 50%; background: #fff; box-shadow: 0 18px 34px rgba(0, 48, 112, .24); }
+    .record-disc::after { content: "M4A"; position: absolute; color: var(--blue); font: 800 13px/1 "SFMono-Regular", Menlo, monospace; letter-spacing: .08em; }
+    .file-label { position: absolute; right: 28px; bottom: 28px; padding: 12px 14px; border-radius: 10px; background: rgba(7, 17, 31, .9); color: #fff; font: 650 11px/1.4 "SFMono-Regular", Menlo, monospace; box-shadow: 0 12px 30px rgba(0, 0, 0, .2); }
+
+    .faq-list { border-top: 1px solid var(--line); }
+    .faq-item { border-bottom: 1px solid var(--line); }
+    .faq-question { width: 100%; min-height: 88px; display: grid; grid-template-columns: 1fr 44px; align-items: center; gap: 24px; padding: 0; border: 0; background: transparent; text-align: left; font-size: 19px; font-weight: 680; letter-spacing: -.02em; cursor: pointer; }
+    .faq-toggle { width: 38px; height: 38px; display: grid; place-items: center; justify-self: end; border: 1px solid #bfc9d5; border-radius: 50%; color: var(--blue); font: 400 24px/1 "SFMono-Regular", Menlo, monospace; transition: transform .22s ease, background .22s ease; }
+    .faq-question[aria-expanded="true"] .faq-toggle { transform: rotate(45deg); background: var(--blue); color: #fff; border-color: var(--blue); }
+    .faq-answer { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .28s ease; }
+    .faq-answer > div { overflow: hidden; }
+    .faq-answer p { max-width: 850px; margin: 0; padding: 0 60px 28px 0; color: var(--muted); font-size: 15px; line-height: 1.8; }
+    .faq-answer code { padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: #e9edf3; font: 600 12px/1.6 "SFMono-Regular", Menlo, monospace; }
+    .faq-item.open .faq-answer { grid-template-rows: 1fr; }
+    .command-box { max-width: 760px; display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; margin: 0 0 28px; padding: 14px 14px 14px 18px; border-radius: 12px; background: var(--night); color: #dbe8f7; font-size: 12px; }
+    .copy-button { min-height: 36px; padding: 0 12px; border: 1px solid rgba(255, 255, 255, .15); border-radius: 8px; background: rgba(255, 255, 255, .08); color: #fff; cursor: pointer; }
+
+    .cta { position: relative; overflow: hidden; padding: 122px 0; background: var(--blue); color: #fff; }
+    .cta::before { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 47px, rgba(255, 255, 255, .06) 47px 48px); }
+    .cta-inner { position: relative; display: grid; grid-template-columns: 1.2fr .8fr; gap: 70px; align-items: end; }
+    .cta h2 { max-width: 760px; margin: 0; font-size: clamp(48px, 6.5vw, 82px); line-height: .98; letter-spacing: -.07em; text-wrap: balance; }
+    .cta-side p { margin: 0 0 26px; color: #dcecff; font-size: 16px; line-height: 1.75; }
+    .cta .button-primary { background: #fff; color: var(--blue); border-color: #fff; box-shadow: 0 15px 36px rgba(0, 45, 106, .2); }
+
+    footer { padding: 30px 0; background: var(--night); color: #7f92a9; }
+    .footer-inner { display: flex; align-items: center; justify-content: space-between; gap: 24px; font-size: 12px; }
+    .footer-links { display: flex; gap: 18px; }
+    .footer-links a:hover { color: #fff; }
+
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    @media (max-width: 1020px) {
+      .hero { grid-template-columns: 1fr; min-height: auto; gap: 45px; padding-bottom: 110px; }
+      .hero-copy { max-width: 680px; }
+      .app-stage { min-height: 580px; }
+      .app-window { width: min(82vw, 640px); transform: none; }
+      .problem-grid, .section-head.split, .preview-layout, .local-panel, .cta-inner { grid-template-columns: 1fr; }
+      .problem-grid { gap: 24px; padding: 55px 0; }
+      .feature-grid { grid-template-columns: 1fr 1fr; }
+      .feature-card:first-child { grid-row: auto; grid-column: span 2; min-height: 380px; }
+      .feature-card.wide { grid-column: span 2; }
+      .preview-layout { gap: 24px; }
+      .state-tabs { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+      .state-tab { grid-template-columns: 1fr; justify-items: center; padding: 13px 8px; text-align: center; }
+      .state-tab small, .state-tab b { display: none; }
+      .preview-stage { min-height: 610px; }
+      .local-copy { min-height: 420px; }
+      .cta-side { max-width: 560px; }
+    }
+
+    @media (max-width: 740px) {
+      .shell { width: min(calc(100% - 28px), var(--content)); }
+      .nav { min-height: 64px; }
+      .brand img { width: 34px; height: 34px; }
+      .menu-button { display: block; }
+      .nav-links { position: fixed; inset: 64px 0 0; display: grid; align-content: start; gap: 0; padding: 28px 22px; background: rgba(7, 17, 31, .98); opacity: 0; pointer-events: none; transform: translateY(-10px); transition: opacity .2s ease, transform .2s ease; }
+      .nav-open .nav-links { opacity: 1; pointer-events: auto; transform: none; }
+      .nav-links > a { width: 100%; min-height: 58px; display: flex; align-items: center; border-bottom: 1px solid rgba(255, 255, 255, .09); font-size: 17px; }
+      .nav-links .nav-cta { width: 100%; min-height: 52px; justify-content: center; margin-top: 20px; border-bottom: 0; }
+      .hero { padding: 118px 0 84px; }
+      .hero h1 { font-size: clamp(48px, 14vw, 68px); }
+      .hero-copy { font-size: 16px; }
+      .actions { display: grid; grid-template-columns: 1fr; }
+      .button { width: 100%; }
+      .app-stage { min-height: 400px; }
+      .app-window { width: 94%; padding: 8px; border-radius: 20px; }
+      .app-window img { border-radius: 14px; }
+      .channel-pill { padding: 9px 11px; font-size: 10px; }
+      .channel-mic { left: 0; bottom: 12%; }
+      .channel-system { right: 0; top: 10%; }
+      .wave-field { height: 130px; }
+      .scroll-cue { display: none; }
+      .problem-grid blockquote { font-size: 30px; }
+      .section { padding: 86px 0; }
+      .section-head { margin-bottom: 38px; }
+      .section h2 { font-size: 42px; }
+      .feature-grid { grid-template-columns: 1fr; }
+      .feature-card, .feature-card:first-child, .feature-card.wide { grid-column: auto; min-height: 290px; }
+      .feature-card.wide { display: flex; }
+      .feature-card.wide .feature-symbol { justify-self: auto; align-self: auto; }
+      .state-tabs { grid-template-columns: repeat(2, 1fr); }
+      .preview-stage { min-height: 470px; border-radius: 22px; }
+      .preview-image { width: 90%; max-height: 430px; }
+      .steps { grid-template-columns: 1fr; }
+      .step { min-height: 260px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .step:last-child { border-bottom: 0; }
+      .step-line { margin: 30px 0 20px; }
+      .permission-note { grid-template-columns: auto 1fr; }
+      .permission-note .mono { display: none; }
+      .local-panel { border-radius: 22px; }
+      .local-copy { min-height: 440px; padding: 30px; }
+      .local-visual { min-height: 390px; }
+      .record-disc { width: 180px; height: 180px; box-shadow: 0 0 0 40px rgba(255,255,255,.08), 0 0 0 80px rgba(255,255,255,.055); }
+      .faq-question { min-height: 82px; font-size: 17px; }
+      .faq-answer p { padding-right: 0; }
+      .command-box { grid-template-columns: 1fr; overflow-wrap: anywhere; }
+      .copy-button { justify-self: start; }
+      .cta { padding: 90px 0; }
+      .cta h2 { font-size: 50px; }
+      .footer-inner { align-items: flex-start; flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="shell nav">
+      <a class="brand" href="#top" aria-label="DualMic 首页">
+        <img src="assets/app-icon.png" alt="">
+        <span>DualMic<small>macOS recorder</small></span>
+      </a>
+      <button class="menu-button" type="button" aria-label="打开导航" aria-expanded="false"><span></span></button>
+      <nav class="nav-links" aria-label="主导航">
+        <a href="#features">功能</a>
+        <a href="#preview">界面</a>
+        <a href="#how">开始使用</a>
+        <a href="#faq">常见问题</a>
+        <a href="https://github.com/askfanxiaojun/DualMic" target="_blank" rel="noreferrer">GitHub ↗</a>
+        <a class="nav-cta" href="https://github.com/askfanxiaojun/DualMic/releases/latest">下载最新版 <span>↓</span></a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <div class="hero-wrap" data-screen-label="Hero">
+      <section class="shell hero">
+        <div class="hero-content reveal">
+          <p class="eyebrow">Mic + System Audio / macOS</p>
+          <h1>戴着耳机，也能把<strong>双方声音录全。</strong></h1>
+          <p class="hero-copy">DualMic 同时捕获<b>麦克风</b>与<b>系统声音</b>，在本机混合导出为一份清晰的 M4A。为视频面试、线上会议和课程复盘而做。</p>
+          <div class="actions">
+            <a class="button button-primary" href="https://github.com/askfanxiaojun/DualMic/releases/latest">下载最新版本 <span class="button-arrow">↓</span></a>
+            <a class="button button-secondary" href="https://github.com/askfanxiaojun/DualMic" target="_blank" rel="noreferrer">查看源代码 <span class="button-arrow">↗</span></a>
+          </div>
+          <div class="fact-row" aria-label="系统信息">
+            <span>macOS 14+</span>
+            <span>Apple Silicon / Intel</span>
+            <span>本地 M4A 导出</span>
+          </div>
+        </div>
+
+        <div class="app-stage reveal" aria-label="DualMic 应用界面">
+          <div class="app-glow"></div>
+          <div class="wave-field" aria-hidden="true">
+            <i style="--h:34px;--d:-.1s"></i><i style="--h:72px;--d:-.8s"></i><i style="--h:118px;--d:-.3s"></i><i style="--h:56px;--d:-1.2s"></i><i style="--h:154px;--d:-.6s"></i><i style="--h:98px;--d:-1.5s"></i><i style="--h:188px;--d:-.4s"></i><i style="--h:76px;--d:-1s"></i><i style="--h:138px;--d:-.2s"></i><i style="--h:42px;--d:-1.3s"></i><i style="--h:104px;--d:-.7s"></i><i style="--h:166px;--d:-.9s"></i><i style="--h:62px;--d:-.5s"></i><i style="--h:126px;--d:-1.4s"></i><i style="--h:82px;--d:-.15s"></i><i style="--h:150px;--d:-1.1s"></i><i style="--h:48px;--d:-.55s"></i>
+          </div>
+          <div class="app-window">
+            <img src="assets/app-window.png" alt="DualMic 主窗口，显示麦克风与系统声音电平">
+          </div>
+          <div class="channel-pill channel-mic">麦克风输入</div>
+          <div class="channel-pill channel-system">系统内部声音</div>
+        </div>
+        <div class="scroll-cue">SCROLL</div>
+      </section>
+    </div>
+
+    <aside class="problem-strip" aria-label="DualMic 解决的问题">
+      <div class="shell problem-grid reveal">
+        <div class="problem-label">The missing channel<br>问题不在麦克风</div>
+        <blockquote>普通录音只听见你的独白。<span>对方的声音，其实在系统音频里。</span></blockquote>
+      </div>
+    </aside>
+
+    <section class="section" id="features" data-screen-label="Features">
+      <div class="shell">
+        <div class="section-head split reveal">
+          <div>
+            <p class="section-kicker">01 / Core features</p>
+            <h2>只做录全一件事，过程足够顺手。</h2>
+          </div>
+          <p class="section-lead">从输入设备、实时电平到暂停继续和本地保存，录制需要的关键动作都集中在一个原生窗口里。</p>
+        </div>
+
+        <div class="feature-grid">
+          <article class="feature-card reveal">
+            <span class="feature-index">DUAL CHANNEL</span>
+            <div class="dual-meter" aria-hidden="true">
+              <div class="meter"><strong>MIC</strong><span class="meter-track"><i class="meter-fill" style="--level:72%;--tone:#087cff"></i></span><span>72%</span></div>
+              <div class="meter"><strong>SYSTEM</strong><span class="meter-track"><i class="meter-fill" style="--level:48%;--tone:#3ddc78"></i></span><span>48%</span></div>
+            </div>
+            <h3>麦克风 + 系统声音</h3>
+            <p>两路声音同步捕获，结束后自动混合。耳机里的对话，也会进入最终录音。</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-index">PAUSE / RESUME</span>
+            <div class="feature-symbol">Ⅱ</div>
+            <h3>暂停后无缝继续</h3>
+            <p>临时中断不用重开文件，继续录制后不产生时间断层。</p>
+          </article>
+
+          <article class="feature-card reveal">
+            <span class="feature-index">LIVE LEVELS</span>
+            <div class="feature-symbol">▥</div>
+            <h3>实时确认两路电平</h3>
+            <p>录制前先看声音有没有进来，避免结束后才发现漏录。</p>
+          </article>
+
+          <article class="feature-card wide reveal">
+            <div>
+              <span class="feature-index">LIGHTWEIGHT MODE</span>
+              <h3>切到菜单栏，安静留在后台</h3>
+              <p>隐藏 Dock 图标，长时间面试或会议时不打扰当前工作；多个麦克风也可在开始前自由切换。</p>
+            </div>
+            <div class="feature-symbol">⌁</div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section preview-section" id="preview" data-screen-label="App states">
+      <div class="shell">
+        <div class="section-head reveal">
+          <p class="section-kicker">02 / App preview</p>
+          <h2>每个状态，一眼就知道。</h2>
+          <p class="section-lead">选择下方状态，查看 DualMic 从准备、录制到保存的真实界面。</p>
+        </div>
+        <div class="preview-layout reveal">
+          <div class="state-tabs" role="tablist" aria-label="应用状态">
+            <button class="state-tab" type="button" role="tab" aria-selected="true" data-image="assets/app-window.png" data-alt="DualMic 准备就绪界面" style="--state:#087cff">
+              <i class="state-dot"></i><span><strong>准备就绪</strong><small>确认权限与电平</small></span><b>01</b>
+            </button>
+            <button class="state-tab" type="button" role="tab" aria-selected="false" data-image="assets/recording.png" data-alt="DualMic 正在录音界面" style="--state:#ff493d">
+              <i class="state-dot"></i><span><strong>正在录制</strong><small>计时、暂停与停止</small></span><b>02</b>
+            </button>
+            <button class="state-tab" type="button" role="tab" aria-selected="false" data-image="assets/complete.png" data-alt="DualMic 录制完成界面" style="--state:#3ddc78">
+              <i class="state-dot"></i><span><strong>录制完成</strong><small>定位或存储文件</small></span><b>03</b>
+            </button>
+            <button class="state-tab" type="button" role="tab" aria-selected="false" data-image="assets/menu-bar.png" data-alt="DualMic 菜单栏模式界面" style="--state:#ff9b35">
+              <i class="state-dot"></i><span><strong>菜单栏模式</strong><small>轻量常驻后台</small></span><b>04</b>
+            </button>
+          </div>
+          <div class="preview-stage">
+            <img class="preview-image" src="assets/app-window.png" alt="DualMic 准备就绪界面">
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section how-section" id="how" data-screen-label="How to use">
+      <div class="shell">
+        <div class="section-head split reveal">
+          <div>
+            <p class="section-kicker">03 / Get started</p>
+            <h2>三步开始录音。</h2>
+          </div>
+          <p class="section-lead">不需要虚拟声卡，也不用配置复杂的音频路由。下载应用、授权两项系统权限，就可以开始。</p>
+        </div>
+        <div class="steps reveal">
+          <article class="step">
+            <span class="step-number">01</span>
+            <div class="step-line"></div>
+            <h3>下载并移入应用程序</h3>
+            <p>从 <a href="https://github.com/askfanxiaojun/DualMic/releases/latest">Releases</a> 下载最新版，将 DualMic 拖入 <span class="mono">/Applications</span>。</p>
+          </article>
+          <article class="step">
+            <span class="step-number">02</span>
+            <div class="step-line"></div>
+            <h3>允许麦克风与屏幕录制</h3>
+            <p>麦克风用来录你的声音；“屏幕录制”权限由 macOS 用来允许 ScreenCaptureKit 捕获系统音频。</p>
+          </article>
+          <article class="step">
+            <span class="step-number">03</span>
+            <div class="step-line"></div>
+            <h3>确认电平，点击录制</h3>
+            <p>选择输入设备，确认两条电平都有响应。结束后 DualMic 会自动混合并让你选择保存位置。</p>
+          </article>
+        </div>
+        <div class="permission-note reveal">
+          <i>i</i>
+          <span><strong>为什么需要“屏幕录制”权限？</strong> DualMic 不录屏幕画面；这是 macOS 捕获系统内部声音所要求的系统权限名称。</span>
+          <span class="mono">ScreenCaptureKit</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" data-screen-label="Local first">
+      <div class="shell">
+        <div class="local-panel reveal">
+          <div class="local-copy">
+            <div>
+              <p class="section-kicker">04 / Local first</p>
+              <h2>录音只留在你的 Mac。</h2>
+              <p>声音在本机捕获、混合和导出。没有账号，没有云端上传；保存位置由你决定，最终得到通用的 AAC 编码 M4A 文件。</p>
+            </div>
+            <div class="local-facts">
+              <span>NO ACCOUNT</span><span>NO CLOUD UPLOAD</span><span>OPEN SOURCE</span>
+            </div>
+          </div>
+          <div class="local-visual" aria-hidden="true">
+            <div class="record-disc"></div>
+            <div class="file-label">interview-2026.m4a<br>192 kbps · AAC</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="faq" data-screen-label="FAQ">
+      <div class="shell">
+        <div class="section-head reveal">
+          <p class="section-kicker">05 / FAQ</p>
+          <h2>安装前，你可能想知道。</h2>
+        </div>
+        <div class="faq-list reveal">
+          <article class="faq-item open">
+            <button class="faq-question" type="button" aria-expanded="true"><span>提示“已损坏，无法打开”怎么办？</span><span class="faq-toggle">+</span></button>
+            <div class="faq-answer"><div>
+              <p>这是 macOS 对未公证第三方应用的隔离提示。将 DualMic 放入“应用程序”后，可以在终端清除它的隔离属性；命令末尾保留一个空格，再把 DualMic.app 拖进终端，然后回车。</p>
+              <div class="command-box"><code>sudo xattr -r -d com.apple.quarantine /Applications/DualMic.app</code><button class="copy-button" type="button" data-copy="sudo xattr -r -d com.apple.quarantine /Applications/DualMic.app">复制命令</button></div>
+            </div></div>
+          </article>
+          <article class="faq-item">
+            <button class="faq-question" type="button" aria-expanded="false"><span>DualMic 会录制屏幕画面吗？</span><span class="faq-toggle">+</span></button>
+            <div class="faq-answer"><div><p>不会。DualMic 只从 ScreenCaptureKit 接收系统音频，不保存任何屏幕视频。macOS 将这项能力统一放在“屏幕录制”权限中，所以首次使用仍需要授权。</p></div></div>
+          </article>
+          <article class="faq-item">
+            <button class="faq-question" type="button" aria-expanded="false"><span>可以只录麦克风，不录系统声音吗？</span><span class="faq-toggle">+</span></button>
+            <div class="faq-answer"><div><p>可以。在开始录制前点击“系统声音”一行将其关闭，DualMic 就只会保留麦克风输入。</p></div></div>
+          </article>
+          <article class="faq-item">
+            <button class="faq-question" type="button" aria-expanded="false"><span>支持哪些 Mac 和系统版本？</span><span class="faq-toggle">+</span></button>
+            <div class="faq-answer"><div><p>需要 macOS 14 Sonoma 或更高版本，支持 Apple Silicon 与 Intel Mac。自行编译需要 Xcode 16 或更高版本。</p></div></div>
+          </article>
+          <article class="faq-item">
+            <button class="faq-question" type="button" aria-expanded="false"><span>录音文件保存成什么格式？</span><span class="faq-toggle">+</span></button>
+            <div class="faq-answer"><div><p>停止录制后，两路音频会在本地自动混合，并导出为 AAC 编码、192 kbps 的 <code>.m4a</code> 文件。</p></div></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="cta" data-screen-label="Download">
+      <div class="shell cta-inner reveal">
+        <h2>下一场对话，别再只录到一半。</h2>
+        <div class="cta-side">
+          <p>免费下载、开源、本地运行。装好后只需要一次权限授权。</p>
+          <a class="button button-primary" href="https://github.com/askfanxiaojun/DualMic/releases/latest">下载 DualMic <span class="button-arrow">↓</span></a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="shell footer-inner">
+      <span>© <span id="year">2026</span> DualMic · Made for better conversations.</span>
+      <div class="footer-links">
+        <a href="https://github.com/askfanxiaojun/DualMic" target="_blank" rel="noreferrer">GitHub</a>
+        <a href="https://github.com/askfanxiaojun/DualMic/releases">Releases</a>
+        <a href="https://github.com/askfanxiaojun/DualMic/issues" target="_blank" rel="noreferrer">Issues</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const body = document.body;
+    const menuButton = document.querySelector('.menu-button');
+    const navLinks = document.querySelectorAll('.nav-links a');
+
+    menuButton.addEventListener('click', () => {
+      const open = body.classList.toggle('nav-open');
+      menuButton.setAttribute('aria-expanded', String(open));
+      menuButton.setAttribute('aria-label', open ? '关闭导航' : '打开导航');
+    });
+
+    navLinks.forEach((link) => link.addEventListener('click', () => {
+      body.classList.remove('nav-open');
+      menuButton.setAttribute('aria-expanded', 'false');
+    }));
+
+    const previewImage = document.querySelector('.preview-image');
+    document.querySelectorAll('.state-tab').forEach((tab) => {
+      tab.addEventListener('click', () => {
+        if (tab.getAttribute('aria-selected') === 'true') return;
+        document.querySelectorAll('.state-tab').forEach((item) => item.setAttribute('aria-selected', 'false'));
+        tab.setAttribute('aria-selected', 'true');
+        previewImage.classList.add('changing');
+        window.setTimeout(() => {
+          previewImage.src = tab.dataset.image;
+          previewImage.alt = tab.dataset.alt;
+          previewImage.classList.remove('changing');
+        }, 170);
+      });
+    });
+
+    document.querySelectorAll('.faq-question').forEach((button) => {
+      button.addEventListener('click', () => {
+        const item = button.closest('.faq-item');
+        const open = item.classList.toggle('open');
+        button.setAttribute('aria-expanded', String(open));
+      });
+    });
+
+    document.querySelectorAll('[data-copy]').forEach((button) => {
+      button.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(button.dataset.copy);
+          const original = button.textContent;
+          button.textContent = '已复制';
+          window.setTimeout(() => { button.textContent = original; }, 1600);
+        } catch (error) {
+          button.textContent = '请手动复制';
+        }
+      });
+    });
+
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          revealObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+
+    document.querySelectorAll('.reveal').forEach((element) => revealObserver.observe(element));
+    document.getElementById('year').textContent = String(new Date().getFullYear());
+  </script>
+</body>
+</html>
